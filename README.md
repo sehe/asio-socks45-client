@@ -10,23 +10,27 @@ The interfaces are sync/async, with a shared underlying implementation.
 
 ## SOCK4 Usage
 
-     tcp::socket sock{ctx};
-     tcp::endpoint
-         proxy{{}, 1080},
-         target(ip::address_v4::from_string("173.203.57.63"), 80);
+```c++
+tcp::socket sock{ctx};
+tcp::endpoint
+    proxy{{}, 1080},
+    target(ip::address_v4::from_string("173.203.57.63"), 80);
 
-     std::cerr << "Using synchronous interface" << std::endl;
-     socks4::proxy_connect(sock, target,
-                           proxy); // throws system_error if failed
+std::cerr << "Using synchronous interface" << std::endl;
+socks4::proxy_connect(sock, target,
+                      proxy); // throws system_error if failed
+```
                            
 Or using the async overload:
 
-     // using the async interface (still emulating synchronous by using
-     // future for brevity of this demo)
-     auto fut = socks4::async_proxy_connect(sock, target, proxy,
-                                            boost::asio::use_future);
+```c++
+// using the async interface (still emulating synchronous by using
+// future for brevity of this demo)
+auto fut = socks4::async_proxy_connect(sock, target, proxy,
+                                       boost::asio::use_future);
 
-     fut.get(); // throws system_error if failed
+fut.get(); // throws system_error if failed
+```
 
 > _SOCKS4a (which also allows name resolution) is not implemented. There seems to be little support._
 
@@ -34,14 +38,18 @@ Or using the async overload:
 
 The SOCKS5 interface accepts a DNS Query as well as resolved end-point.
 
-    tcp::resolver::query target("example.com", "443");
+```c++
+tcp::resolver::query target("example.com", "443");
 
-    std::future<void> conn_result = socks5::async_proxy_connect(
-        socket, target, tcp::endpoint{{}, 1080}, ba::use_future);
+std::future<void> conn_result = socks5::async_proxy_connect(
+    socket, target, tcp::endpoint{{}, 1080}, ba::use_future);
+```
 
 Again, synchronous connect is also supported:
 
-    socks5::proxy_connect(socket, target, tcp::endpoint{{}, 1080});
+```c++
+socks5::proxy_connect(socket, target, tcp::endpoint{{}, 1080});
+```
 
 > The BIND and UDP ASSOCIATE commands are not implemented.
 
