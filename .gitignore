@@ -1,0 +1,4 @@
+CMakeCache.txt
+CMakeFiles/
+examples/socks4-client
+examples/socks5-ssl-client
