@@ -153,7 +153,7 @@ namespace socks5 {
                 ipv4_octets              ipv4;
                 ipv6_octets              ipv6;
                 std::array<uint8_t, 256> domain{0}; // length prefixed
-            } payload;
+            } payload = {0};
 
             size_t var_length() const {
                 return sizeof(type) + payload_length();
@@ -182,7 +182,7 @@ namespace socks5 {
             // constructors
             request_t(Endpoint const& ep) : port(ep.port())
             {
-                auto& addr = ep.address();
+                auto&& addr = ep.address();
                 if (addr.is_v4()) {
                     var_address.type         = addr_type::IPv4;
                     var_address.payload.ipv4 = addr.to_v4().to_bytes();
