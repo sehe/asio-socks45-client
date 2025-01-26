@@ -26,7 +26,7 @@ namespace socks4 { // threw in the kitchen sink for error codes
 		failed = 99,
     };
 
-    auto const& get_result_category() {
+    inline auto const& get_result_category() {
       struct impl : error_category {
         const char* name() const noexcept override { return "result_code"; }
         std::string message(int ev) const override {
@@ -56,7 +56,7 @@ namespace socks4 { // threw in the kitchen sink for error codes
       return instance;
     }
 
-    error_code make_error_code(result_code se) {
+    inline error_code make_error_code(result_code se) {
         return error_code{
             static_cast<std::underlying_type<result_code>::type>(se),
             get_result_category()};
