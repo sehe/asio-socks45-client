@@ -55,6 +55,7 @@ socks5::proxy_connect(socket, target, tcp::endpoint{{}, 1080});
 
 ## DEMO
 
-The answers show live demos. Here's the SOCKS5 demo using an openssh client as the SOCKS server:
+The answers show live demos. Here's a parallel demo of all SOCKS4 and SOCKS5
+example programs demo using an openssh client as the SOCKS server:
 
-![SOCKS5 demo](/doc/socks5.gif?raw=true "SOCKS5 demo")
+![live demo](/doc/demos.gif?raw=true "live demo animations")
