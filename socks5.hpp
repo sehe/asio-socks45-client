@@ -1,5 +1,6 @@
 #include <boost/asio.hpp>
 #include <boost/endian/arithmetic.hpp>
+#include <boost/core/ignore_unused.hpp>
 
 namespace socks5 { // threw in the kitchen sink for error codes
 #ifdef STANDALONE_ASIO
@@ -153,7 +154,7 @@ namespace socks5 {
                 ipv4_octets              ipv4;
                 ipv6_octets              ipv6;
                 std::array<uint8_t, 256> domain{0}; // length prefixed
-            } payload;
+            } payload{};
 
             size_t var_length() const {
                 return sizeof(type) + payload_length();
@@ -342,6 +343,7 @@ namespace socks5 {
         }
 
         void operator()(Self& self, GREETING_SENT, error_code ec, size_t xfer) {
+            boost::ignore_unused(xfer);
             if (ec) return _handler(ec);
             auto buf = _core.greeting_response_buffers();
             boost::asio::async_read(
@@ -350,6 +352,7 @@ namespace socks5 {
         }
 
         void operator()(Self& self, ONGREETING_RESPONSE, error_code ec, size_t xfer) {
+            boost::ignore_unused(xfer);
             ec = _core.get_greeting_result(ec);
             if (ec) return _handler(ec);
 
@@ -359,6 +362,7 @@ namespace socks5 {
         }
 
         void operator()(Self& self, REQUEST_SENT, error_code ec, size_t xfer) {
+            boost::ignore_unused(xfer);
             if (ec) return _handler(ec);
             auto buf = _core.response_head_buffers();
             boost::asio::async_read(
@@ -367,6 +371,7 @@ namespace socks5 {
         }
 
         void operator()(Self& self, ON_RESPONSE_HEAD, error_code ec, size_t xfer) {
+            boost::ignore_unused(xfer);
             if (ec) return _handler(ec);
             auto buf = _core.response_tail_buffers();
             boost::asio::async_read(
@@ -375,6 +380,7 @@ namespace socks5 {
         }
 
         void operator()(Self& self, ON_RESPONSE_TAIL, error_code ec, size_t xfer) {
+            boost::ignore_unused(self, xfer);
             _handler(_core.get_result(ec));
         }
     };

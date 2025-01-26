@@ -1,4 +1,5 @@
 #include <boost/asio.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/endian/arithmetic.hpp>
 
 namespace socks4 { // threw in the kitchen sink for error codes
@@ -180,6 +181,7 @@ namespace socks4 {
         }
 
         void operator()(Self& self, SENT, error_code ec, size_t xfer) {
+            boost::ignore_unused(xfer);
             if (ec) return _handler(ec);
             auto buf = _core.response_buffers();
             boost::asio::async_read(
@@ -188,6 +190,7 @@ namespace socks4 {
         }
 
         void operator()(Self& self, ONRESPONSE, error_code ec, size_t xfer) {
+            boost::ignore_unused(self, xfer);
             _handler(_core.get_result(ec));
         }
     };
