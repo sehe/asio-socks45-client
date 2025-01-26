@@ -80,12 +80,16 @@ struct boost::system::is_error_code_enum<socks5::result_code>
 namespace socks5 {
     using namespace std::placeholders;
 
+    struct TargetSpec {
+        std::string host;
+        uint16_t    port;
+    };
+
     template <typename Proto> struct core_t {
         using Endpoint = typename Proto::endpoint;
-        using Query    = typename boost::asio::ip::basic_resolver<Proto>::query;
         Endpoint _proxy;
 
-        core_t(Query const& target, Endpoint proxy)
+        core_t(TargetSpec const& target, Endpoint proxy)
             : _proxy(proxy)
             , _request(target)
         {
@@ -193,8 +197,8 @@ namespace socks5 {
                 }
             }
 
-            request_t(Query const& q) : port(std::stoi(q.service_name())) {
-                std::string const domain = q.host_name();
+            request_t(TargetSpec const& s) : port(s.port) {
+                std::string const domain = s.host;
                 var_address.type         = addr_type::Domain;
 
                 auto len = std::min(var_address.payload.domain.max_size() - 1,
@@ -299,9 +303,9 @@ namespace socks5 {
         Completion    _handler;
 
       public:
-        template <typename EndpointOrQuery>
+        template <typename EndpointOrSpec>
         async_proxy_connect_op(Completion handler, Socket& s,
-                               EndpointOrQuery target, Endpoint proxy)
+                               EndpointOrSpec target, Endpoint proxy)
             : _core(target, proxy)
             , _socket(s)
             , _handler(std::move(handler))
@@ -385,9 +389,9 @@ namespace socks5 {
         }
     };
 
-    template <typename Socket, typename EndpointOrQuery,
+    template <typename Socket, typename EndpointOrSpec,
               typename Endpoint = typename Socket::protocol_type::endpoint>
-    error_code proxy_connect(Socket& s, EndpointOrQuery target, Endpoint proxy,
+    error_code proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy,
                              error_code& ec)
     {
         core_t<typename Socket::protocol_type> core(target, proxy);
@@ -421,18 +425,18 @@ namespace socks5 {
         return ec = core.get_result(ec);
     }
 
-    template <typename Socket, typename EndpointOrQuery,
+    template <typename Socket, typename EndpointOrSpec,
               typename Endpoint = typename Socket::protocol_type::endpoint>
-    void proxy_connect(Socket& s, EndpointOrQuery target, Endpoint proxy)
+    void proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy)
     {
         error_code ec;
         if (proxy_connect(s, target, proxy, ec))
             throw system_error(ec);
     }
 
-    template <typename Socket, typename Token, typename EndpointOrQuery,
+    template <typename Socket, typename Token, typename EndpointOrSpec,
               typename Endpoint = typename Socket::protocol_type::endpoint>
-    auto async_proxy_connect(Socket& s, EndpointOrQuery target, Endpoint proxy,
+    auto async_proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy,
                              Token&& token)
     {
         using Result = asio::async_result<std::decay_t<Token>, void(error_code)>;

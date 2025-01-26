@@ -12,8 +12,8 @@ int main(int argc, char**)
     boost::asio::thread_pool ctx(1); // just one thread will do
 
     tcp::socket   sock{ctx};
-    tcp::endpoint target(
-        boost::asio::ip::address_v4::from_string("173.203.57.63"), 80),
+    tcp::endpoint //
+        target{boost::asio::ip::make_address("173.203.57.63"), 80},
         proxy{{}, 1080};
 
     try {

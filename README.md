@@ -14,7 +14,7 @@ The interfaces are sync/async, with a shared underlying implementation.
 tcp::socket sock{ctx};
 tcp::endpoint
     proxy{{}, 1080},
-    target(ip::address_v4::from_string("173.203.57.63"), 80);
+    target{ip::make_address("173.203.57.63"), 80};
 
 std::cerr << "Using synchronous interface" << std::endl;
 socks4::proxy_connect(sock, target,
@@ -36,10 +36,10 @@ fut.get(); // throws system_error if failed
 
 ## SOCKS5 Usage
 
-The SOCKS5 interface accepts a DNS Query as well as resolved end-point.
+The SOCKS5 interface accepts a qualified domain name as well as resolved end-point.
 
 ```c++
-tcp::resolver::query target("example.com", "443");
+socks5::TargetSpec target("example.com", 443);
 
 std::future<void> conn_result = socks5::async_proxy_connect(
     socket, target, tcp::endpoint{{}, 1080}, ba::use_future);

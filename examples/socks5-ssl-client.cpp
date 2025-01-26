@@ -23,7 +23,7 @@ int main(int argc, char**)
 
     auto& socket = ssl_socket.next_layer();
 
-    tcp::resolver::query target("example.com", "443");
+    socks5::TargetSpec target{"example.com", 443};
 
     if (synchronous) {
         std::future<void> conn_result = socks5::async_proxy_connect(
