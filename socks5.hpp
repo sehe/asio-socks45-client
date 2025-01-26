@@ -1,20 +1,11 @@
 #include <boost/asio.hpp>
 #include <boost/endian/arithmetic.hpp>
-#include <boost/core/ignore_unused.hpp>
 
 namespace socks5 { // threw in the kitchen sink for error codes
-#ifdef STANDALONE_ASIO
-    using std::error_category;
-    using std::error_code;
-    using std::error_condition;
-    using std::system_error;
-#else
-    namespace asio = boost::asio;
     using boost::system::error_category;
     using boost::system::error_code;
     using boost::system::error_condition;
     using boost::system::system_error;
-#endif
 
     enum class result_code {
         ok                         = 0,
@@ -58,8 +49,8 @@ namespace socks5 { // threw in the kitchen sink for error codes
             const noexcept override {
             return condition.value() == ev && &condition.category() == this;
         }
-        bool equivalent(error_code const& error,
-                        int ev) const noexcept override {
+        bool equivalent(error_code const& error, int ev) const noexcept override
+        {
             return error.value() == ev && &error.category() == this;
         }
       } const static instance;
@@ -78,8 +69,6 @@ struct boost::system::is_error_code_enum<socks5::result_code>
     : std::true_type {};
 
 namespace socks5 {
-    using namespace std::placeholders;
-
     struct TargetSpec {
         std::string host;
         uint16_t    port;
@@ -290,108 +279,93 @@ namespace socks5 {
 
     };
 
-    template <typename Socket, typename Completion>
-    struct async_proxy_connect_op {
+    template <typename Socket> struct async_proxy_connect_op {
         using Proto         = typename Socket::protocol_type;
         using Endpoint      = typename Proto::endpoint;
         using executor_type = typename Socket::executor_type;
         auto get_executor() { return _socket.get_executor(); }
 
       private:
-        core_t<Proto> _core;
-        Socket&       _socket;
-        Completion    _handler;
+        std::unique_ptr<core_t<Proto>> _core;
+        Socket&                        _socket;
+        boost::asio::coroutine         _coro; // states
 
       public:
         template <typename EndpointOrSpec>
-        async_proxy_connect_op(Completion handler, Socket& s,
-                               EndpointOrSpec target, Endpoint proxy)
-            : _core(target, proxy)
+        async_proxy_connect_op(Socket& s, EndpointOrSpec target, Endpoint proxy)
+            : _core(std::make_unique<core_t<Proto>>(target, proxy))
             , _socket(s)
-            , _handler(std::move(handler))
         {
         }
 
-        using Self = std::unique_ptr<async_proxy_connect_op>;
-        void init(Self&& self) { operator()(self, INIT{}); }
+#include <boost/asio/yield.hpp>
+        template <typename Self>
+        void operator()(Self& self, error_code ec = {}, size_t /*xfer*/ = 0)
+        {
+            reenter(_coro)
+            {
+                yield {
+                    auto& proxy = _core->_proxy;
+                    _socket.async_connect(proxy, std::move(self));
+                }
+                if (ec)
+                    return self.complete(ec);
 
-      private:
-        // states
-        struct INIT{};
-        struct CONNECT{};
-        struct GREETING_SENT{};
-        struct ONGREETING_RESPONSE{};
-        struct REQUEST_SENT{};
-        struct ON_RESPONSE_HEAD{};
-        struct ON_RESPONSE_TAIL{};
+                yield {
+                    auto buf = _core->greeting_buffers();
+                    boost::asio::async_write(_socket, buf,
+                                             std::move(self));
+                }
+                if (ec)
+                    return self.complete(ec);
 
-        struct Binder {
-            Self _self;
-            template <typename... Args>
-            decltype(auto) operator()(Args&&... args) {
-                return (*_self)(_self, std::forward<Args>(args)...);
+                yield {
+                    auto buf = _core->greeting_response_buffers();
+                    boost::asio::async_read(
+                        _socket, buf,
+                        boost::asio::transfer_exactly(buffer_size(buf)),
+                        std::move(self));
+                }
+
+                ec = _core->get_greeting_result(ec);
+                if (ec)
+                    return self.complete(ec);
+
+                yield {
+                    auto buf = _core->request_buffers();
+                    boost::asio::async_write(_socket, buf, std::move(self));
+                }
+
+                if (ec)
+                    return self.complete(ec);
+
+                yield {
+                    auto buf = _core->response_head_buffers();
+                    boost::asio::async_read(
+                            _socket, buf, boost::asio::transfer_exactly(buffer_size(buf)),
+                            std::move(self));
+                }
+
+                if (ec)
+                    return self.complete(ec);
+
+                yield {
+                    auto buf = _core->response_tail_buffers();
+                    boost::asio::async_read(
+                            _socket, buf,
+                            boost::asio::transfer_exactly(buffer_size(buf)),
+                            std::move(self));
+                }
+
+                self.complete(_core->get_result(ec));
             }
-        };
-
-        void operator()(Self& self, INIT) {
-            _socket.async_connect(_core._proxy,
-               std::bind(Binder{std::move(self)}, CONNECT{}, _1));
         }
-
-        void operator()(Self& self, CONNECT, error_code ec) {
-            if (ec) return _handler(ec);
-            boost::asio::async_write(
-                _socket,
-                _core.greeting_buffers(),
-                std::bind(Binder{std::move(self)}, GREETING_SENT{}, _1, _2));
-        }
-
-        void operator()(Self& self, GREETING_SENT, error_code ec, size_t xfer) {
-            boost::ignore_unused(xfer);
-            if (ec) return _handler(ec);
-            auto buf = _core.greeting_response_buffers();
-            boost::asio::async_read(
-                _socket, buf, boost::asio::transfer_exactly(buffer_size(buf)),
-                std::bind(Binder{std::move(self)}, ONGREETING_RESPONSE{}, _1, _2));
-        }
-
-        void operator()(Self& self, ONGREETING_RESPONSE, error_code ec, size_t xfer) {
-            boost::ignore_unused(xfer);
-            ec = _core.get_greeting_result(ec);
-            if (ec) return _handler(ec);
-
-            boost::asio::async_write(
-                _socket, _core.request_buffers(),
-                std::bind(Binder{std::move(self)}, REQUEST_SENT{}, _1, _2));
-        }
-
-        void operator()(Self& self, REQUEST_SENT, error_code ec, size_t xfer) {
-            boost::ignore_unused(xfer);
-            if (ec) return _handler(ec);
-            auto buf = _core.response_head_buffers();
-            boost::asio::async_read(
-                _socket, buf, boost::asio::transfer_exactly(buffer_size(buf)),
-                std::bind(Binder{std::move(self)}, ON_RESPONSE_HEAD{}, _1, _2));
-        }
-
-        void operator()(Self& self, ON_RESPONSE_HEAD, error_code ec, size_t xfer) {
-            boost::ignore_unused(xfer);
-            if (ec) return _handler(ec);
-            auto buf = _core.response_tail_buffers();
-            boost::asio::async_read(
-                _socket, buf, boost::asio::transfer_exactly(buffer_size(buf)),
-                std::bind(Binder{std::move(self)}, ON_RESPONSE_TAIL{}, _1, _2));
-        }
-
-        void operator()(Self& self, ON_RESPONSE_TAIL, error_code ec, size_t xfer) {
-            boost::ignore_unused(self, xfer);
-            _handler(_core.get_result(ec));
-        }
+#include <boost/asio/unyield.hpp>
     };
 
     template <typename Socket, typename EndpointOrSpec,
               typename Endpoint = typename Socket::protocol_type::endpoint>
-    error_code proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy,
+    void proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy,
                              error_code& ec)
     {
         core_t<typename Socket::protocol_type> core(target, proxy);
@@ -422,7 +396,7 @@ namespace socks5 {
             boost::asio::read(s, buf, transfer_exactly(buffer_size(buf)), ec);
         }
 
-        return ec = core.get_result(ec);
+        ec = core.get_result(ec);
     }
 
     template <typename Socket, typename EndpointOrSpec,
@@ -430,7 +404,8 @@ namespace socks5 {
     void proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy)
     {
         error_code ec;
-        if (proxy_connect(s, target, proxy, ec))
+        proxy_connect(s, target, proxy, ec);
+        if (ec.failed())
             throw system_error(ec);
     }
 
@@ -439,16 +414,7 @@ namespace socks5 {
     auto async_proxy_connect(Socket& s, EndpointOrSpec target, Endpoint proxy,
                              Token&& token)
     {
-        using Result = asio::async_result<std::decay_t<Token>, void(error_code)>;
-        using Completion = typename Result::completion_handler_type;
-
-        Completion completion(std::forward<Token>(token));
-        Result     result(completion);
-
-        using Op = async_proxy_connect_op<Socket, Completion>;
-        // make an owning self ptr, to serve a unique async chain
-        auto self = std::make_unique<Op>(completion, s, target, proxy);
-        self->init(std::move(self));
-        return result.get();
+        return boost::asio::async_compose<Token, void(error_code)>(
+            async_proxy_connect_op<Socket>{s, target, proxy}, token, s);
     }
 } // namespace socks5
