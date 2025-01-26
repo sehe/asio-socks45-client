@@ -1,7 +1,6 @@
 #include "socks5.hpp"
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
-#include <boost/beast/http.hpp>
 #include <iostream>
 
 namespace ssl = boost::asio::ssl;
@@ -25,7 +24,7 @@ int main(int argc, char**)
 
     socks5::TargetSpec target{"example.com", 443};
 
-    if (synchronous) {
+    if (!synchronous) {
         std::future<void> conn_result = socks5::async_proxy_connect(
             socket, target, tcp::endpoint{{}, 1080}, boost::asio::use_future);
 

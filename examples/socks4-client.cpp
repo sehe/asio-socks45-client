@@ -17,11 +17,7 @@ int main(int argc, char**)
         proxy{{}, 1080};
 
     try {
-        if (synchronous) {
-            std::cerr << "Using synchronous interface" << std::endl;
-            socks4::proxy_connect(sock, target,
-                                  proxy); // throws system_error if failed
-        } else {
+        if (!synchronous) {
             std::cerr << "Using asynchronous interface" << std::endl;
             // using the async interface (still emulating synchronous by using
             // future for brevity of this demo)
@@ -29,6 +25,10 @@ int main(int argc, char**)
                                                    boost::asio::use_future);
 
             fut.get(); // throws system_error if failed
+        } else {
+            std::cerr << "Using synchronous interface" << std::endl;
+            socks4::proxy_connect(sock, target,
+                                  proxy); // throws system_error if failed
         }
 
         // Now do a request using beast
