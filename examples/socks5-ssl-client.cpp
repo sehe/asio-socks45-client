@@ -6,19 +6,17 @@
 namespace ssl = boost::asio::ssl;
 using namespace std::chrono_literals;
 
-int main(int argc, char**)
-{
+int main(int argc, char**) try {
     bool synchronous = argc > 1;
 
-    std::thread             io_thread; // for async demo
-    boost::asio::io_context ios;
+    boost::asio::thread_pool ioc(1);
 
     ssl::context ssl_ctx(ssl::context_base::method::sslv23);
     ssl_ctx.set_verify_mode(ssl::verify_peer);
     ssl_ctx.set_default_verify_paths();
 
     using boost::asio::ip::tcp;
-    ssl::stream<tcp::socket> ssl_socket(ios, ssl_ctx);
+    ssl::stream<tcp::socket> ssl_socket(ioc, ssl_ctx);
 
     auto& socket = ssl_socket.next_layer();
 
@@ -27,8 +25,6 @@ int main(int argc, char**)
     if (!synchronous) {
         std::future<void> conn_result = socks5::async_proxy_connect(
             socket, target, tcp::endpoint{{}, 1080}, boost::asio::use_future);
-
-        io_thread = std::thread ([&ios] { ios.run(); });
 
         if (conn_result.wait_for(1s) == std::future_status::timeout) {
             socket.cancel();
@@ -62,6 +58,9 @@ int main(int argc, char**)
         std::cout << res;
     }
 
-    if (io_thread.joinable())
-        io_thread.join();
+    ioc.join();
+} catch (boost::system::system_error const& e) {
+    std::cerr << "Error: " << e.code().message() << std::endl;
+} catch (std::exception const& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
 }

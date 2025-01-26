@@ -39,7 +39,6 @@ int main(int argc, char**)
             http::request<http::empty_body> req(http::verb::get, "/", 11);
             req.set(http::field::host, "coliru.stacked-crooked.com");
             req.set(http::field::connection, "close");
-            std::cout << "-------\nRequest: " << req << "\n-------\n";
             http::write(sock, req);
         }
 
